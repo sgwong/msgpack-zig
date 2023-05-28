@@ -1,5 +1,4 @@
 const std = @import("std");
-//const time = @import("time");
 
 const msgPackWriter = @import("writer.zig").MsgPackWriter;
 const msgPackReader = @import("reader.zig").MsgPackReader;
@@ -43,7 +42,6 @@ pub fn main() anyerror!void {
 
     var encodingBuffer = try allocator.alloc(u8, 1024 * 1024);
     defer allocator.free(encodingBuffer);
-    //std.mem.set(u8, encodingBuffer, 0);
     @memset(encodingBuffer, 0);
 
     var stream = std.io.fixedBufferStream(encodingBuffer);
@@ -51,14 +49,12 @@ pub fn main() anyerror!void {
     var fileContentBuffer = std.ArrayList(u8).init(allocator);
     defer fileContentBuffer.deinit();
 
-    //const testInputPath = @import("build_options").TEST_INPUT_PATH;
     const cwd = try std.process.getCwdAlloc(allocator);
     defer allocator.free(cwd);
     const testInputPath = try std.fs.path.join(allocator, &[_][]const u8{ cwd, "tests" });
     defer allocator.free(testInputPath);
     std.log.info("{s}", .{testInputPath});
 
-    //var testDir = try std.fs.openDirAbsolute(testInputPath, .{ .iterate = true });
     var testDir = try std.fs.openIterableDirAbsolute(testInputPath, .{});
     defer testDir.close();
 
@@ -109,14 +105,12 @@ pub fn main() anyerror!void {
                 //std.debug.print("READ: {}\n", .{std.fmt.fmtSliceHexLower(possibleEncoding)});
                 var tempStream = std.io.fixedBufferStream(possibleEncoding);
                 const IOReader = msgPackReader(@TypeOf(tempStream.reader()));
-                //var reader = msgPackReader(tempStream.reader());
                 var reader = IOReader.init(tempStream.reader());
                 const value = try reader.readJson(&arena);
 
                 try decodedEncodings.append(value.root);
 
                 tempStream = std.io.fixedBufferStream(possibleEncoding);
-                //reader = msgPackReader(tempStream.reader());
                 reader = IOReader.init(tempStream.reader());
                 const msgPackValue = try reader.readValue(&arena);
                 std.debug.print("  TEST: ", .{});
@@ -243,16 +237,8 @@ pub fn main() anyerror!void {
 }
 
 pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
-    //var local = time.Location.getLocal();
-    //var now = time.now(&local);
-    //std.log.info("now : {}", .{now});
-    //std.log.info("date: {}", .{now.date()});
-    //std.log.info("sec : {}", .{now.unix()});
-    //std.log.info("nsec: {}", .{now.nanosecond()});
-
     var encodingBuffer = try allocator.alloc(u8, 1024 * 1024);
     defer allocator.free(encodingBuffer);
-    //std.mem.set(u8, encodingBuffer, 0);
     @memset(encodingBuffer, 0);
 
     var stream = std.io.fixedBufferStream(encodingBuffer);
@@ -279,8 +265,6 @@ pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
     const now_sec_nano = try std.math.mod(u32, now_nano, std.time.ns_per_s);
     try msgPack.writeTimestamp(now_sec, now_sec_nano);
     try msgPack.writeTimestamp(now_sec, 0);
-    //try msgPack.writeTimestamp(now.unixt(), @intCast(u32, now.nanosecond()));
-    //try msgPack.writeTimestamp(now.unix(), 0);
 
     try msgPack.writeAny(foo);
     try msgPack.writeExt(72, std.mem.asBytes(&foo));

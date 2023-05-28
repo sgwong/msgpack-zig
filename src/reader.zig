@@ -1,5 +1,4 @@
 const std = @import("std");
-//const time = @import("time");
 const builtin = @import("builtin");
 const native_endian = builtin.cpu.arch.endian();
 const EpochSeconds = std.time.epoch.EpochSeconds;
@@ -73,7 +72,6 @@ pub const Value = union(enum) {
 
             .Timestamp => |inner| {
                 try out_stream.writeAll("#timestamp \"");
-                //const t = time.unix(inner.sec, inner.nsec, &time.Location.utc_local);
                 try inner.writeString(out_stream);
                 try out_stream.writeAll("\"");
             },
@@ -83,9 +81,7 @@ pub const Value = union(enum) {
                 var field_output = false;
                 var child_options = options;
                 var child_whitespace = child_options.whitespace;
-                //if (child_options.whitespace) |*child_whitespace| {
                 child_whitespace.indent_level += 1;
-                //}
 
                 for (inner) |item| {
                     if (!field_output) {
@@ -94,23 +90,17 @@ pub const Value = union(enum) {
                         try out_stream.writeByte(',');
                     }
 
-                    //if (child_options.whitespace) |child_whitespace| {
                     try out_stream.writeByte('\n');
                     try child_whitespace.outputIndent(out_stream);
-                    //}
 
                     try std.fmt.format(out_stream, "0x{x}", .{item});
-                    //if (child_options.whitespace) |child_whitespace| {
                     if (child_whitespace.separator) {
                         try out_stream.writeByte(' ');
                     }
-                    //}
                 }
                 if (field_output) {
-                    //if (options.whitespace) |whitespace| {
                     try out_stream.writeByte('\n');
                     try child_whitespace.outputIndent(out_stream);
-                    //}
                 }
 
                 try out_stream.writeByte(']');
@@ -122,17 +112,11 @@ pub const Value = union(enum) {
                 try out_stream.writeByte(':');
                 var child_options = options;
                 var child_whitespace = child_options.whitespace;
-                //if (options.whitespace) |child_whitespace| {
-                //    _ = child_whitespace;
                 try out_stream.writeByte(' ');
-                //}
 
                 try out_stream.writeByte('[');
                 var field_output = false;
-                //var child_options = options;
-                //if (child_options.whitespace) |*child_whitespace| {
                 child_whitespace.indent_level += 1;
-                //}
 
                 for (inner.data) |item| {
                     if (!field_output) {
@@ -141,23 +125,17 @@ pub const Value = union(enum) {
                         try out_stream.writeByte(',');
                     }
 
-                    //if (child_options.whitespace) |child_whitespace| {
                     try out_stream.writeByte('\n');
                     try child_whitespace.outputIndent(out_stream);
-                    //}
 
                     try std.fmt.format(out_stream, "0x{x}", .{item});
-                    //if (child_options.whitespace) |child_whitespace| {
                     if (child_whitespace.separator) {
                         try out_stream.writeByte(' ');
                     }
-                    //}
                 }
                 if (field_output) {
-                    //if (options.whitespace) |whitespace| {
                     try out_stream.writeByte('\n');
                     try child_whitespace.outputIndent(out_stream);
-                    //}
                 }
 
                 try out_stream.writeByte(']');
@@ -168,9 +146,7 @@ pub const Value = union(enum) {
                 var field_output = false;
                 var child_options = options;
                 var child_whitespace = child_options.whitespace;
-                //if (child_options.whitespace) |*child_whitespace| {
                 child_whitespace.indent_level += 1;
-                //}
 
                 for (inner.items) |item| {
                     if (!field_output) {
@@ -179,23 +155,17 @@ pub const Value = union(enum) {
                         try out_stream.writeByte(',');
                     }
 
-                    //if (child_options.whitespace) |child_whitespace| {
                     try out_stream.writeByte('\n');
                     try child_whitespace.outputIndent(out_stream);
-                    //}
 
                     try item.stringify(child_options, out_stream);
-                    //if (child_options.whitespace) |child_whitespace| {
                     if (child_whitespace.separator) {
                         try out_stream.writeByte(' ');
                     }
-                    //}
                 }
                 if (field_output) {
-                    //if (options.whitespace) |whitespace| {
                     try out_stream.writeByte('\n');
                     try child_whitespace.outputIndent(out_stream);
-                    //}
                 }
 
                 try out_stream.writeByte(']');
@@ -206,9 +176,7 @@ pub const Value = union(enum) {
                 var field_output = false;
                 var child_options = options;
                 var child_whitespace = child_options.whitespace;
-                //if (child_options.whitespace) |*child_whitespace| {
                 child_whitespace.indent_level += 1;
-                //}
                 var it = inner.iterator();
                 while (it.next()) |entry| {
                     if (!field_output) {
@@ -216,26 +184,20 @@ pub const Value = union(enum) {
                     } else {
                         try out_stream.writeByte(',');
                     }
-                    //if (child_options.whitespace) |child_whitespace| {
                     try out_stream.writeByte('\n');
                     try child_whitespace.outputIndent(out_stream);
-                    //}
 
                     try std.json.stringify(entry.key_ptr.*, options, out_stream);
                     try out_stream.writeByte(':');
-                    //if (child_options.whitespace) |child_whitespace| {
                     if (child_whitespace.separator) {
                         try out_stream.writeByte(' ');
                     }
-                    //}
                     try entry.value_ptr.stringify(child_options, out_stream);
                     //try std.json.stringify(entry.value_ptr.*, child_options, out_stream);
                 }
                 if (field_output) {
-                    //if (options.whitespace) |whitespace| {
                     try out_stream.writeByte('\n');
                     try child_whitespace.outputIndent(out_stream);
-                    //}
                 }
                 try out_stream.writeByte('}');
             },
@@ -820,7 +782,6 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
         pub fn readJsonExt(self: *Self, allocator: std.mem.Allocator, typ: i8, len: usize) anyerror!std.json.Value {
             const strLen = @intCast(usize, len) * 2 + if (len > 1) @intCast(usize, len - 1) else 0;
             const buffer = try allocator.alloc(u8, strLen);
-            //std.mem.set(u8, buffer, 0);
             @memset(buffer, 0);
             var stream = std.io.fixedBufferStream(buffer);
             var writer = stream.writer();
