@@ -1,8 +1,8 @@
 const std = @import("std");
-const time = @import("time");
+//const time = @import("time");
 
-usingnamespace @import("writer.zig");
-usingnamespace @import("reader.zig");
+const msgPackWriter = @import("writer.zig").MsgPackWriter;
+const msgPackReader = @import("reader.zig").MsgPackReader;
 
 const String = struct {
     value: []const u8,
@@ -39,20 +39,27 @@ const Bar = struct {
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
+    var allocator = gpa.allocator();
 
-    var encodingBuffer = try gpa.allocator.alloc(u8, 1024 * 1024);
-    defer gpa.allocator.free(encodingBuffer);
-    std.mem.set(u8, encodingBuffer, 0);
+    var encodingBuffer = try allocator.alloc(u8, 1024 * 1024);
+    defer allocator.free(encodingBuffer);
+    //std.mem.set(u8, encodingBuffer, 0);
+    @memset(encodingBuffer, 0);
 
     var stream = std.io.fixedBufferStream(encodingBuffer);
 
-    var fileContentBuffer = std.ArrayList(u8).init(&gpa.allocator);
+    var fileContentBuffer = std.ArrayList(u8).init(allocator);
     defer fileContentBuffer.deinit();
 
-    const testInputPath = @import("build_options").TEST_INPUT_PATH;
+    //const testInputPath = @import("build_options").TEST_INPUT_PATH;
+    const cwd = try std.process.getCwdAlloc(allocator);
+    defer allocator.free(cwd);
+    const testInputPath = try std.fs.path.join(allocator, &[_][]const u8{ cwd, "tests" });
+    defer allocator.free(testInputPath);
     std.log.info("{s}", .{testInputPath});
 
-    var testDir = try std.fs.openDirAbsolute(testInputPath, .{ .iterate = true });
+    //var testDir = try std.fs.openDirAbsolute(testInputPath, .{ .iterate = true });
+    var testDir = try std.fs.openIterableDirAbsolute(testInputPath, .{});
     defer testDir.close();
 
     // iterate over all files
@@ -64,50 +71,54 @@ pub fn main() anyerror!void {
         if (entry.kind != .File) continue;
         std.log.info("{s}", .{entry.name});
 
-        var file = try testDir.openFile(entry.name, .{ .read = true });
+        var file = try testDir.dir.openFile(entry.name, .{ .mode = .read_only });
         var fileReader = file.reader();
 
         // read entire file
         fileContentBuffer.clearRetainingCapacity();
         try fileReader.readAllArrayList(&fileContentBuffer, std.math.maxInt(usize));
 
-        var parser = std.json.Parser.init(&gpa.allocator, false);
+        var parser = std.json.Parser.init(allocator, .alloc_if_needed);
         defer parser.deinit();
 
         var valueTree: std.json.ValueTree = try parser.parse(fileContentBuffer.items);
         defer valueTree.deinit();
 
-        var arena = std.heap.ArenaAllocator.init(&gpa.allocator);
+        var arena = std.heap.ArenaAllocator.init(allocator);
         defer arena.deinit();
+        var arena_allocator = arena.allocator();
 
         // iterate over all test cases in one file
-        for (valueTree.root.Array.items) |testCaseJson| {
-            const testObject = testCaseJson.Object;
-            const msgpackEncodingsJson = testObject.get("msgpack").?.Array;
+        for (valueTree.root.array.items) |testCaseJson| {
+            const testObject = testCaseJson.object;
+            const msgpackEncodingsJson = testObject.get("msgpack").?.array;
 
             // list of possible encodings for the value
-            var possibleEncodings = try std.ArrayList([]const u8).initCapacity(&arena.allocator, msgpackEncodingsJson.items.len);
+            var possibleEncodings = try std.ArrayList([]const u8).initCapacity(arena_allocator, msgpackEncodingsJson.items.len);
             for (msgpackEncodingsJson.items) |encodingJson| {
-                var encoding = std.ArrayList(u8).init(&arena.allocator);
-                var iter = std.mem.split(encodingJson.String, "-");
+                var encoding = std.ArrayList(u8).init(arena_allocator);
+                var iter = std.mem.split(u8, encodingJson.string, "-");
                 while (iter.next()) |byte| {
                     try encoding.append(try std.fmt.parseInt(u8, byte, 16));
                 }
-                try possibleEncodings.append(encoding.toOwnedSlice());
+                try possibleEncodings.append(try encoding.toOwnedSlice());
             }
 
-            var decodedEncodings = try std.ArrayList(std.json.Value).initCapacity(&arena.allocator, msgpackEncodingsJson.items.len);
+            var decodedEncodings = try std.ArrayList(std.json.Value).initCapacity(arena_allocator, msgpackEncodingsJson.items.len);
             for (possibleEncodings.items) |possibleEncoding| {
                 //std.debug.print("READ: {}\n", .{std.fmt.fmtSliceHexLower(possibleEncoding)});
                 var tempStream = std.io.fixedBufferStream(possibleEncoding);
-                var reader = msgPackReader(tempStream.reader());
-                const value = try reader.readJson(&arena.allocator);
+                const IOReader = msgPackReader(@TypeOf(tempStream.reader()));
+                //var reader = msgPackReader(tempStream.reader());
+                var reader = IOReader.init(tempStream.reader());
+                const value = try reader.readJson(&arena);
 
                 try decodedEncodings.append(value.root);
 
                 tempStream = std.io.fixedBufferStream(possibleEncoding);
-                reader = msgPackReader(tempStream.reader());
-                const msgPackValue = try reader.readValue(&arena.allocator);
+                //reader = msgPackReader(tempStream.reader());
+                reader = IOReader.init(tempStream.reader());
+                const msgPackValue = try reader.readValue(&arena);
                 std.debug.print("  TEST: ", .{});
                 try msgPackValue.root.stringify(.{}, std.io.getStdErr().writer());
                 std.debug.print("\n", .{});
@@ -115,7 +126,8 @@ pub fn main() anyerror!void {
 
             // encode the value from the test
             stream.reset();
-            var msgPack = msgPackWriter(stream.writer(), .{});
+            const MsgPackW = msgPackWriter(@TypeOf(stream.writer()));
+            var msgPack = MsgPackW.init(stream.writer(), .{});
             const valueToEncode: std.json.Value = blk: {
                 if (testObject.get("nil")) |value| {
                     try msgPack.writeJson(value);
@@ -136,14 +148,14 @@ pub fn main() anyerror!void {
                     try msgPack.writeJson(map);
                     break :blk map;
                 } else if (testObject.get("timestamp")) |timestampJson| {
-                    const timestampArray = timestampJson.Array.items;
-                    const sec = timestampArray[0].Integer;
-                    const nsec = timestampArray[1].Integer;
+                    const timestampArray = timestampJson.array.items;
+                    const sec = timestampArray[0].integer;
+                    const nsec = timestampArray[1].integer;
                     try msgPack.writeTimestamp(sec, @intCast(u32, nsec));
                     break :blk timestampJson;
                 } else if (testObject.get("bignum")) |numberJson| {
                     switch (numberJson) {
-                        .String => |stringValue| {
+                        .string => |stringValue| {
                             if (std.fmt.parseInt(i64, stringValue, 10)) |value| {
                                 try msgPack.writeInt(value);
                             } else |_| {
@@ -157,21 +169,21 @@ pub fn main() anyerror!void {
                     }
                     break :blk numberJson;
                 } else if (testObject.get("binary")) |binaryJson| {
-                    var encoding = std.ArrayList(u8).init(&gpa.allocator);
+                    var encoding = std.ArrayList(u8).init(allocator);
                     defer encoding.deinit();
-                    var iter = std.mem.tokenize(binaryJson.String, "-");
+                    var iter = std.mem.tokenize(u8, binaryJson.string, "-");
                     while (iter.next()) |byte| {
                         try encoding.append(try std.fmt.parseInt(u8, byte, 16));
                     }
                     try msgPack.writeBytes(encoding.items);
                     break :blk binaryJson;
                 } else if (testObject.get("ext")) |extJson| {
-                    const extArray = extJson.Array.items;
-                    const typ = extArray[0].Integer;
-                    const bytes = extArray[1].String;
-                    var encoding = std.ArrayList(u8).init(&gpa.allocator);
+                    const extArray = extJson.array.items;
+                    const typ = extArray[0].integer;
+                    const bytes = extArray[1].string;
+                    var encoding = std.ArrayList(u8).init(allocator);
                     defer encoding.deinit();
-                    var iter = std.mem.tokenize(bytes, "-");
+                    var iter = std.mem.tokenize(u8, bytes, "-");
                     while (iter.next()) |byte| {
                         try encoding.append(try std.fmt.parseInt(u8, byte, 16));
                     }
@@ -183,13 +195,13 @@ pub fn main() anyerror!void {
             };
 
             { // Test decoding
-                var valueString = std.ArrayList(u8).init(&arena.allocator);
-                var decodedString = std.ArrayList(u8).init(&arena.allocator);
+                var valueString = std.ArrayList(u8).init(arena_allocator);
+                var decodedString = std.ArrayList(u8).init(arena_allocator);
 
                 try valueToEncode.jsonStringify(.{}, valueString.writer());
 
                 // Compare value to all decoded values in decodedEncodings
-                for (decodedEncodings.items) |decodedValue, k| {
+                for (decodedEncodings.items, 0..) |decodedValue, k| {
                     decodedString.clearRetainingCapacity();
                     try decodedValue.jsonStringify(.{}, decodedString.writer());
 
@@ -231,16 +243,17 @@ pub fn main() anyerror!void {
 }
 
 pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
-    var local = time.Location.getLocal();
-    var now = time.now(&local);
-    std.log.info("now : {}", .{now});
-    std.log.info("date: {}", .{now.date()});
-    std.log.info("sec : {}", .{now.unix()});
-    std.log.info("nsec: {}", .{now.nanosecond()});
+    //var local = time.Location.getLocal();
+    //var now = time.now(&local);
+    //std.log.info("now : {}", .{now});
+    //std.log.info("date: {}", .{now.date()});
+    //std.log.info("sec : {}", .{now.unix()});
+    //std.log.info("nsec: {}", .{now.nanosecond()});
 
     var encodingBuffer = try allocator.alloc(u8, 1024 * 1024);
     defer allocator.free(encodingBuffer);
-    std.mem.set(u8, encodingBuffer, 0);
+    //std.mem.set(u8, encodingBuffer, 0);
+    @memset(encodingBuffer, 0);
 
     var stream = std.io.fixedBufferStream(encodingBuffer);
 
@@ -261,8 +274,13 @@ pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
         .e = String{ .value = "this is a String" },
     };
 
-    try msgPack.writeTimestamp(now.unix(), @intCast(u32, now.nanosecond()));
-    try msgPack.writeTimestamp(now.unix(), 0);
+    const now_nano = std.time.nanoTimestamp();
+    const now_sec = @intCast(i64, @divTrunc(now_nano, std.time.ns_per_s));
+    const now_sec_nano = try std.math.mod(u32, now_nano, std.time.ns_per_s);
+    try msgPack.writeTimestamp(now_sec, now_sec_nano);
+    try msgPack.writeTimestamp(now_sec, 0);
+    //try msgPack.writeTimestamp(now.unixt(), @intCast(u32, now.nanosecond()));
+    //try msgPack.writeTimestamp(now.unix(), 0);
 
     try msgPack.writeAny(foo);
     try msgPack.writeExt(72, std.mem.asBytes(&foo));
@@ -302,7 +320,7 @@ pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
     try msgPack.writeBool(false);
 
     std.debug.print("\n", .{});
-    const writtenBuffer = buffer[0..try stream.getPos()];
+    const writtenBuffer = encodingBuffer[0..try stream.getPos()];
     var i: usize = 0;
     while (true) : (i += 16) {
         if (i >= writtenBuffer.len) break;

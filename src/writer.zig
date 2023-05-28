@@ -1,6 +1,8 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const native_endian = builtin.cpu.arch.endian();
 
-pub fn MsgPackWriter(comptime WriterType: anytype, comptime Fast: bool) type {
+pub fn MsgPackWriter(comptime WriterType: type) type {
     return struct {
         const Self = @This();
 
@@ -24,7 +26,7 @@ pub fn MsgPackWriter(comptime WriterType: anytype, comptime Fast: bool) type {
         }
 
         fn writeBytesEndianCorrected(self: *Self, bytes: []const u8) !void {
-            switch (std.Target.current.cpu.arch.endian()) {
+            switch (native_endian) {
                 .Big => try self.writer.writeAll(bytes),
                 .Little => {
                     var i: isize = @intCast(isize, bytes.len) - 1;
@@ -285,20 +287,22 @@ pub fn MsgPackWriter(comptime WriterType: anytype, comptime Fast: bool) type {
         }
         pub fn writeJson(self: *Self, json: std.json.Value) anyerror!void {
             switch (json) {
-                .Null => try self.writeNil(),
-                .Bool => |value| try self.writeBool(value),
-                .Integer => |value| try self.writeInt(value),
-                .Float => |value| try self.writeFloat(value),
-                .NumberString => |value| {},
-                .String => |value| try self.writeString(value),
-                .Array => |array| {
+                .null => try self.writeNil(),
+                .bool => |value| try self.writeBool(value),
+                .integer => |value| try self.writeInt(value),
+                .float => |value| try self.writeFloat(value),
+                .number_string => |value| {
+                    _ = value;
+                },
+                .string => |value| try self.writeString(value),
+                .array => |array| {
                     try self.beginArray(array.items.len);
 
                     for (array.items) |valueJson| {
                         try self.writeJson(valueJson);
                     }
                 },
-                .Object => |object| {
+                .object => |object| {
                     try self.beginMap(object.count());
 
                     var iter = object.iterator();

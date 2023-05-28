@@ -1,5 +1,8 @@
 const std = @import("std");
-const time = @import("time");
+//const time = @import("time");
+const builtin = @import("builtin");
+const native_endian = builtin.cpu.arch.endian();
+const EpochSeconds = std.time.epoch.EpochSeconds;
 
 pub const ValueTree = struct {
     arena: std.heap.ArenaAllocator,
@@ -21,6 +24,25 @@ pub const Ext = struct {
 pub const Timestamp = struct {
     sec: i64,
     nsec: u32,
+
+    fn writeString(self: Timestamp, writer: anytype) !void {
+        if (self.sec < 0) {
+            try std.fmt.format(writer, "not support -ve sec UTC\n", .{});
+            return;
+        }
+        const epoch_seconds = EpochSeconds{ .secs = @intCast(u64, self.sec) };
+        const day_seconds = epoch_seconds.getDaySeconds();
+        const hour = day_seconds.getHoursIntoDay();
+        const minutes = day_seconds.getMinutesIntoHour();
+        const sec = day_seconds.getSecondsIntoMinute();
+        const epoch_day = epoch_seconds.getEpochDay();
+        const year_day = epoch_day.calculateYearDay();
+        const year = year_day.year;
+        const month_day = year_day.calculateMonthDay();
+        const month = month_day.month.numeric();
+        const day = month_day.day_index;
+        try std.fmt.format(writer, "{}-{}-{} {}:{}:{}.{} UTC\n", .{ year, month, day, hour, minutes, sec, self.nsec });
+    }
 };
 
 pub const Value = union(enum) {
@@ -51,8 +73,8 @@ pub const Value = union(enum) {
 
             .Timestamp => |inner| {
                 try out_stream.writeAll("#timestamp \"");
-                const t = time.unix(inner.sec, inner.nsec, &time.Location.utc_local);
-                try std.fmt.format(out_stream, "{}", .{t});
+                //const t = time.unix(inner.sec, inner.nsec, &time.Location.utc_local);
+                try inner.writeString(out_stream);
                 try out_stream.writeAll("\"");
             },
 
@@ -60,9 +82,10 @@ pub const Value = union(enum) {
                 try out_stream.writeByte('[');
                 var field_output = false;
                 var child_options = options;
-                if (child_options.whitespace) |*child_whitespace| {
-                    child_whitespace.indent_level += 1;
-                }
+                var child_whitespace = child_options.whitespace;
+                //if (child_options.whitespace) |*child_whitespace| {
+                child_whitespace.indent_level += 1;
+                //}
 
                 for (inner) |item| {
                     if (!field_output) {
@@ -71,23 +94,23 @@ pub const Value = union(enum) {
                         try out_stream.writeByte(',');
                     }
 
-                    if (child_options.whitespace) |child_whitespace| {
-                        try out_stream.writeByte('\n');
-                        try child_whitespace.outputIndent(out_stream);
-                    }
+                    //if (child_options.whitespace) |child_whitespace| {
+                    try out_stream.writeByte('\n');
+                    try child_whitespace.outputIndent(out_stream);
+                    //}
 
                     try std.fmt.format(out_stream, "0x{x}", .{item});
-                    if (child_options.whitespace) |child_whitespace| {
-                        if (child_whitespace.separator) {
-                            try out_stream.writeByte(' ');
-                        }
+                    //if (child_options.whitespace) |child_whitespace| {
+                    if (child_whitespace.separator) {
+                        try out_stream.writeByte(' ');
                     }
+                    //}
                 }
                 if (field_output) {
-                    if (options.whitespace) |whitespace| {
-                        try out_stream.writeByte('\n');
-                        try whitespace.outputIndent(out_stream);
-                    }
+                    //if (options.whitespace) |whitespace| {
+                    try out_stream.writeByte('\n');
+                    try child_whitespace.outputIndent(out_stream);
+                    //}
                 }
 
                 try out_stream.writeByte(']');
@@ -97,16 +120,19 @@ pub const Value = union(enum) {
                 try out_stream.writeAll("#ext ");
                 try std.json.stringify(inner.type, options, out_stream);
                 try out_stream.writeByte(':');
-                if (options.whitespace) |child_whitespace| {
-                    try out_stream.writeByte(' ');
-                }
+                var child_options = options;
+                var child_whitespace = child_options.whitespace;
+                //if (options.whitespace) |child_whitespace| {
+                //    _ = child_whitespace;
+                try out_stream.writeByte(' ');
+                //}
 
                 try out_stream.writeByte('[');
                 var field_output = false;
-                var child_options = options;
-                if (child_options.whitespace) |*child_whitespace| {
-                    child_whitespace.indent_level += 1;
-                }
+                //var child_options = options;
+                //if (child_options.whitespace) |*child_whitespace| {
+                child_whitespace.indent_level += 1;
+                //}
 
                 for (inner.data) |item| {
                     if (!field_output) {
@@ -115,23 +141,23 @@ pub const Value = union(enum) {
                         try out_stream.writeByte(',');
                     }
 
-                    if (child_options.whitespace) |child_whitespace| {
-                        try out_stream.writeByte('\n');
-                        try child_whitespace.outputIndent(out_stream);
-                    }
+                    //if (child_options.whitespace) |child_whitespace| {
+                    try out_stream.writeByte('\n');
+                    try child_whitespace.outputIndent(out_stream);
+                    //}
 
                     try std.fmt.format(out_stream, "0x{x}", .{item});
-                    if (child_options.whitespace) |child_whitespace| {
-                        if (child_whitespace.separator) {
-                            try out_stream.writeByte(' ');
-                        }
+                    //if (child_options.whitespace) |child_whitespace| {
+                    if (child_whitespace.separator) {
+                        try out_stream.writeByte(' ');
                     }
+                    //}
                 }
                 if (field_output) {
-                    if (options.whitespace) |whitespace| {
-                        try out_stream.writeByte('\n');
-                        try whitespace.outputIndent(out_stream);
-                    }
+                    //if (options.whitespace) |whitespace| {
+                    try out_stream.writeByte('\n');
+                    try child_whitespace.outputIndent(out_stream);
+                    //}
                 }
 
                 try out_stream.writeByte(']');
@@ -141,9 +167,10 @@ pub const Value = union(enum) {
                 try out_stream.writeByte('[');
                 var field_output = false;
                 var child_options = options;
-                if (child_options.whitespace) |*child_whitespace| {
-                    child_whitespace.indent_level += 1;
-                }
+                var child_whitespace = child_options.whitespace;
+                //if (child_options.whitespace) |*child_whitespace| {
+                child_whitespace.indent_level += 1;
+                //}
 
                 for (inner.items) |item| {
                     if (!field_output) {
@@ -152,23 +179,23 @@ pub const Value = union(enum) {
                         try out_stream.writeByte(',');
                     }
 
-                    if (child_options.whitespace) |child_whitespace| {
-                        try out_stream.writeByte('\n');
-                        try child_whitespace.outputIndent(out_stream);
-                    }
+                    //if (child_options.whitespace) |child_whitespace| {
+                    try out_stream.writeByte('\n');
+                    try child_whitespace.outputIndent(out_stream);
+                    //}
 
                     try item.stringify(child_options, out_stream);
-                    if (child_options.whitespace) |child_whitespace| {
-                        if (child_whitespace.separator) {
-                            try out_stream.writeByte(' ');
-                        }
+                    //if (child_options.whitespace) |child_whitespace| {
+                    if (child_whitespace.separator) {
+                        try out_stream.writeByte(' ');
                     }
+                    //}
                 }
                 if (field_output) {
-                    if (options.whitespace) |whitespace| {
-                        try out_stream.writeByte('\n');
-                        try whitespace.outputIndent(out_stream);
-                    }
+                    //if (options.whitespace) |whitespace| {
+                    try out_stream.writeByte('\n');
+                    try child_whitespace.outputIndent(out_stream);
+                    //}
                 }
 
                 try out_stream.writeByte(']');
@@ -178,9 +205,10 @@ pub const Value = union(enum) {
                 try out_stream.writeByte('{');
                 var field_output = false;
                 var child_options = options;
-                if (child_options.whitespace) |*child_whitespace| {
-                    child_whitespace.indent_level += 1;
-                }
+                var child_whitespace = child_options.whitespace;
+                //if (child_options.whitespace) |*child_whitespace| {
+                child_whitespace.indent_level += 1;
+                //}
                 var it = inner.iterator();
                 while (it.next()) |entry| {
                     if (!field_output) {
@@ -188,26 +216,26 @@ pub const Value = union(enum) {
                     } else {
                         try out_stream.writeByte(',');
                     }
-                    if (child_options.whitespace) |child_whitespace| {
-                        try out_stream.writeByte('\n');
-                        try child_whitespace.outputIndent(out_stream);
-                    }
+                    //if (child_options.whitespace) |child_whitespace| {
+                    try out_stream.writeByte('\n');
+                    try child_whitespace.outputIndent(out_stream);
+                    //}
 
                     try std.json.stringify(entry.key_ptr.*, options, out_stream);
                     try out_stream.writeByte(':');
-                    if (child_options.whitespace) |child_whitespace| {
-                        if (child_whitespace.separator) {
-                            try out_stream.writeByte(' ');
-                        }
+                    //if (child_options.whitespace) |child_whitespace| {
+                    if (child_whitespace.separator) {
+                        try out_stream.writeByte(' ');
                     }
+                    //}
                     try entry.value_ptr.stringify(child_options, out_stream);
                     //try std.json.stringify(entry.value_ptr.*, child_options, out_stream);
                 }
                 if (field_output) {
-                    if (options.whitespace) |whitespace| {
-                        try out_stream.writeByte('\n');
-                        try whitespace.outputIndent(out_stream);
-                    }
+                    //if (options.whitespace) |whitespace| {
+                    try out_stream.writeByte('\n');
+                    try child_whitespace.outputIndent(out_stream);
+                    //}
                 }
                 try out_stream.writeByte('}');
             },
@@ -215,7 +243,7 @@ pub const Value = union(enum) {
     }
 };
 
-pub fn MsgPackReader(comptime ReaderType: anytype) type {
+pub fn MsgPackReader(comptime ReaderType: type) type {
     return struct {
         const Self = @This();
 
@@ -228,12 +256,13 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
         }
 
         fn readFromSliceEndianCorrected(self: *Self, comptime T: type, data: []const u8) !T {
+            _ = self;
             if (@sizeOf(T) > data.len) {
                 return error.Eof;
             }
             var result: T = undefined;
             std.mem.copy(u8, std.mem.asBytes(&result), data[0..@sizeOf(T)]);
-            if (std.Target.current.cpu.arch.endian() == .Little) {
+            if (native_endian == .Little) {
                 std.mem.reverse(u8, std.mem.asBytes(&result));
             }
             return result;
@@ -245,7 +274,7 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             if (bytesRead != @sizeOf(T)) {
                 return error.Eof;
             }
-            if (std.Target.current.cpu.arch.endian() == .Little) {
+            if (native_endian == .Little) {
                 std.mem.reverse(u8, std.mem.asBytes(&result));
             }
             return result;
@@ -280,6 +309,7 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
         }
 
         fn printIndent(self: *Self, indent: usize) void {
+            _ = self;
             var k: usize = 0;
             while (k < indent) : (k += 1) {
                 std.debug.print("  ", .{});
@@ -293,6 +323,7 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             }
 
             var result: T = 0;
+            _ = result;
             const tag = try self.reader.readByte();
 
             if (typeInfo.Int.signedness == .unsigned) {
@@ -340,19 +371,19 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             }
         }
 
-        pub fn readValue(self: *Self, allocator: *std.mem.Allocator) anyerror!ValueTree {
-            var arena = std.heap.ArenaAllocator.init(allocator);
+        pub fn readValue(self: *Self, arena: *std.heap.ArenaAllocator) anyerror!ValueTree {
             errdefer arena.deinit();
+            const allocator = arena.allocator();
 
-            const value = try self.readValueInternal(&arena.allocator);
+            const value = try self.readValueInternal(allocator);
 
             return ValueTree{
-                .arena = arena,
+                .arena = arena.*,
                 .root = value,
             };
         }
 
-        fn readValueInternal(self: *Self, allocator: *std.mem.Allocator) anyerror!Value {
+        fn readValueInternal(self: *Self, allocator: std.mem.Allocator) anyerror!Value {
             const tag = try self.reader.readByte();
             switch (tag) {
                 0xc0 => return .Nil,
@@ -526,7 +557,7 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             }
         }
 
-        pub fn readValueExt(self: *Self, allocator: *std.mem.Allocator, typ: i8, len: usize) anyerror!Value {
+        pub fn readValueExt(self: *Self, allocator: std.mem.Allocator, typ: i8, len: usize) anyerror!Value {
             const buffer = try allocator.alloc(u8, len);
             const bytesRead = try self.reader.readAll(buffer);
             if (bytesRead != buffer.len) {
@@ -536,7 +567,7 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             return Value{ .Ext = .{ .type = typ, .data = buffer } };
         }
 
-        pub fn readValueString(self: *Self, allocator: *std.mem.Allocator, len: usize) anyerror!Value {
+        pub fn readValueString(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!Value {
             const buffer = try allocator.alloc(u8, len);
             const bytesRead = try self.reader.readAll(buffer);
             if (bytesRead != buffer.len) {
@@ -545,7 +576,7 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             return Value{ .String = buffer };
         }
 
-        pub fn readValueBytes(self: *Self, allocator: *std.mem.Allocator, len: usize) anyerror!Value {
+        pub fn readValueBytes(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!Value {
             const buffer = try allocator.alloc(u8, len);
             const bytesRead = try self.reader.readAll(buffer);
             if (bytesRead != buffer.len) {
@@ -554,7 +585,7 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             return Value{ .Binary = buffer };
         }
 
-        pub fn readValueArray(self: *Self, allocator: *std.mem.Allocator, len: usize) anyerror!Value {
+        pub fn readValueArray(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!Value {
             var array = try std.ArrayList(Value).initCapacity(allocator, len);
 
             var i: usize = 0;
@@ -565,7 +596,7 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             return Value{ .Array = array };
         }
 
-        pub fn readValueObject(self: *Self, allocator: *std.mem.Allocator, len: usize) anyerror!Value {
+        pub fn readValueObject(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!Value {
             var object = std.StringArrayHashMap(Value).init(allocator);
 
             var i: usize = 0;
@@ -583,11 +614,8 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             return Value{ .Map = object };
         }
 
-        pub fn readJson(self: *Self, allocator: *std.mem.Allocator) anyerror!std.json.ValueTree {
-            var arena = std.heap.ArenaAllocator.init(allocator);
-            errdefer arena.deinit();
-
-            const value = try self.readJsonInternal(&arena.allocator);
+        pub fn readJson(self: *Self, arena: *std.heap.ArenaAllocator) anyerror!std.json.ValueTree {
+            const value = try self.readJsonInternal(arena.allocator());
 
             return std.json.ValueTree{
                 .arena = arena,
@@ -595,39 +623,39 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             };
         }
 
-        fn readJsonInternal(self: *Self, allocator: *std.mem.Allocator) anyerror!std.json.Value {
+        fn readJsonInternal(self: *Self, allocator: std.mem.Allocator) anyerror!std.json.Value {
             const tag = try self.reader.readByte();
             switch (tag) {
-                0xc0 => return .Null,
+                0xc0 => return .null,
 
                 // bool
-                0xc2 => return std.json.Value{ .Bool = false },
-                0xc3 => return std.json.Value{ .Bool = true },
+                0xc2 => return std.json.Value{ .bool = false },
+                0xc3 => return std.json.Value{ .bool = true },
 
                 // u8 - u64
-                0xcc => return std.json.Value{ .Integer = @intCast(i64, try self.readAnyEndianCorrected(u8)) },
-                0xcd => return std.json.Value{ .Integer = @intCast(i64, try self.readAnyEndianCorrected(u16)) },
-                0xce => return std.json.Value{ .Integer = @intCast(i64, try self.readAnyEndianCorrected(u32)) },
+                0xcc => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(u8)) },
+                0xcd => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(u16)) },
+                0xce => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(u32)) },
                 0xcf => {
                     const value = try self.readAnyEndianCorrected(u64);
                     if (value <= @intCast(u64, std.math.maxInt(i64))) {
-                        return std.json.Value{ .Integer = @intCast(i64, value) };
+                        return std.json.Value{ .integer = @intCast(i64, value) };
                     } else {
                         var buffer = std.ArrayList(u8).init(allocator);
                         try std.fmt.formatIntValue(value, "", .{}, buffer.writer());
-                        return std.json.Value{ .NumberString = buffer.toOwnedSlice() };
+                        return std.json.Value{ .number_string = try buffer.toOwnedSlice() };
                     }
                 },
 
                 // i8 - i64
-                0xd0 => return std.json.Value{ .Integer = @intCast(i64, try self.readAnyEndianCorrected(i8)) },
-                0xd1 => return std.json.Value{ .Integer = @intCast(i64, try self.readAnyEndianCorrected(i16)) },
-                0xd2 => return std.json.Value{ .Integer = @intCast(i64, try self.readAnyEndianCorrected(i32)) },
-                0xd3 => return std.json.Value{ .Integer = @intCast(i64, try self.readAnyEndianCorrected(i64)) },
+                0xd0 => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(i8)) },
+                0xd1 => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(i16)) },
+                0xd2 => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(i32)) },
+                0xd3 => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(i64)) },
 
                 // f32 - f64
-                0xca => return std.json.Value{ .Float = @floatCast(f64, try self.readAnyEndianCorrected(f32)) },
-                0xcb => return std.json.Value{ .Float = @floatCast(f64, try self.readAnyEndianCorrected(f64)) },
+                0xca => return std.json.Value{ .float = @floatCast(f64, try self.readAnyEndianCorrected(f32)) },
+                0xcb => return std.json.Value{ .float = @floatCast(f64, try self.readAnyEndianCorrected(f64)) },
 
                 // str 8 - str 32
                 0xd9 => { // str 8
@@ -696,9 +724,9 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
                         const sec = try self.readFromSliceEndianCorrected(u32, data[0..]);
 
                         var ext = try std.ArrayList(std.json.Value).initCapacity(allocator, 2);
-                        try ext.append(std.json.Value{ .Integer = sec });
-                        try ext.append(std.json.Value{ .Integer = 0 });
-                        return std.json.Value{ .Array = ext };
+                        try ext.append(std.json.Value{ .integer = sec });
+                        try ext.append(std.json.Value{ .integer = 0 });
+                        return std.json.Value{ .array = ext };
                     } else {
                         return try self.readJsonExt(allocator, typ, 4);
                     }
@@ -715,9 +743,9 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
                         const sec = @bitCast(i64, data64 & 0x00000003ffffffff);
 
                         var ext = try std.ArrayList(std.json.Value).initCapacity(allocator, 2);
-                        try ext.append(std.json.Value{ .Integer = sec });
-                        try ext.append(std.json.Value{ .Integer = nsec });
-                        return std.json.Value{ .Array = ext };
+                        try ext.append(std.json.Value{ .integer = sec });
+                        try ext.append(std.json.Value{ .integer = nsec });
+                        return std.json.Value{ .array = ext };
                     } else {
                         return try self.readJsonExt(allocator, typ, 8);
                     }
@@ -741,9 +769,9 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
                         const sec = try self.readAnyEndianCorrected(i64);
 
                         var ext = try std.ArrayList(std.json.Value).initCapacity(allocator, 2);
-                        try ext.append(std.json.Value{ .Integer = sec });
-                        try ext.append(std.json.Value{ .Integer = nsec });
-                        return std.json.Value{ .Array = ext };
+                        try ext.append(std.json.Value{ .integer = sec });
+                        try ext.append(std.json.Value{ .integer = nsec });
+                        return std.json.Value{ .array = ext };
                     } else {
                         return try self.readJsonExt(allocator, typ, len);
                     }
@@ -764,11 +792,11 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
                     if (tag & 0b1000_0000 == 0) {
                         // positive fixint
                         const value = tag;
-                        return std.json.Value{ .Integer = @intCast(i64, value) };
+                        return std.json.Value{ .integer = @intCast(i64, value) };
                     } else if (tag & 0b1110_0000 == 0b1110_0000) {
                         // negative fixint
                         var value = @bitCast(i8, tag & 0b1111_1111);
-                        return std.json.Value{ .Integer = @intCast(i64, value) };
+                        return std.json.Value{ .integer = @intCast(i64, value) };
                     } else if (tag & 0b1110_0000 == 0b1010_0000) {
                         // fixstr
                         const len = tag & 0b0001_1111;
@@ -789,10 +817,11 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             }
         }
 
-        pub fn readJsonExt(self: *Self, allocator: *std.mem.Allocator, typ: i8, len: usize) anyerror!std.json.Value {
+        pub fn readJsonExt(self: *Self, allocator: std.mem.Allocator, typ: i8, len: usize) anyerror!std.json.Value {
             const strLen = @intCast(usize, len) * 2 + if (len > 1) @intCast(usize, len - 1) else 0;
             const buffer = try allocator.alloc(u8, strLen);
-            std.mem.set(u8, buffer, 0);
+            //std.mem.set(u8, buffer, 0);
+            @memset(buffer, 0);
             var stream = std.io.fixedBufferStream(buffer);
             var writer = stream.writer();
 
@@ -804,22 +833,22 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
             }
 
             var ext = try std.ArrayList(std.json.Value).initCapacity(allocator, 2);
-            try ext.append(std.json.Value{ .Integer = typ });
-            try ext.append(std.json.Value{ .String = buffer });
+            try ext.append(std.json.Value{ .integer = typ });
+            try ext.append(std.json.Value{ .string = buffer });
 
-            return std.json.Value{ .Array = ext };
+            return std.json.Value{ .array = ext };
         }
 
-        pub fn readJsonString(self: *Self, allocator: *std.mem.Allocator, len: usize) anyerror!std.json.Value {
+        pub fn readJsonString(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!std.json.Value {
             const buffer = try allocator.alloc(u8, len);
             const bytesRead = try self.reader.readAll(buffer);
             if (bytesRead != buffer.len) {
                 return error.Eof;
             }
-            return std.json.Value{ .String = buffer };
+            return std.json.Value{ .string = buffer };
         }
 
-        pub fn readJsonBinary(self: *Self, allocator: *std.mem.Allocator, len: usize) anyerror!std.json.Value {
+        pub fn readJsonBinary(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!std.json.Value {
             const strLen = @intCast(usize, len) * 2 + if (len > 1) @intCast(usize, len - 1) else 0;
             const buffer = try allocator.alloc(u8, strLen);
             var stream = std.io.fixedBufferStream(buffer);
@@ -832,10 +861,10 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
                 try std.fmt.formatIntValue(byte, "x", .{ .width = 2, .fill = '0' }, writer);
             }
 
-            return std.json.Value{ .String = buffer };
+            return std.json.Value{ .string = buffer };
         }
 
-        pub fn readJsonArray(self: *Self, allocator: *std.mem.Allocator, len: usize) anyerror!std.json.Value {
+        pub fn readJsonArray(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!std.json.Value {
             var array = try std.ArrayList(std.json.Value).initCapacity(allocator, len);
 
             var i: usize = 0;
@@ -843,10 +872,10 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
                 try array.append(try self.readJsonInternal(allocator));
             }
 
-            return std.json.Value{ .Array = array };
+            return std.json.Value{ .array = array };
         }
 
-        pub fn readJsonObject(self: *Self, allocator: *std.mem.Allocator, len: usize) anyerror!std.json.Value {
+        pub fn readJsonObject(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!std.json.Value {
             var object = std.StringArrayHashMap(std.json.Value).init(allocator);
 
             var i: usize = 0;
@@ -854,14 +883,14 @@ pub fn MsgPackReader(comptime ReaderType: anytype) type {
                 const key = try self.readJsonInternal(allocator);
                 const value = try self.readJsonInternal(allocator);
 
-                if (key == .String) {
-                    try object.put(key.String, value);
+                if (key == .string) {
+                    try object.put(key.string, value);
                 } else {
                     return error.MapContainsNonStringKey;
                 }
             }
 
-            return std.json.Value{ .Object = object };
+            return std.json.Value{ .object = object };
         }
     };
 }
