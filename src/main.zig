@@ -40,6 +40,8 @@ pub fn main() anyerror!void {
     defer _ = gpa.deinit();
     var allocator = gpa.allocator();
 
+    try testStuff(allocator);
+
     var encodingBuffer = try allocator.alloc(u8, 1024 * 1024);
     defer allocator.free(encodingBuffer);
     @memset(encodingBuffer, 0);
@@ -234,7 +236,7 @@ pub fn main() anyerror!void {
     }
 }
 
-pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
+pub fn testStuff(allocator: std.mem.Allocator) anyerror!void {
     var encodingBuffer = try allocator.alloc(u8, 1024 * 1024);
     defer allocator.free(encodingBuffer);
     @memset(encodingBuffer, 0);
@@ -260,8 +262,8 @@ pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
 
     const now_nano = std.time.nanoTimestamp();
     const now_sec = @intCast(i64, @divTrunc(now_nano, std.time.ns_per_s));
-    const now_sec_nano = try std.math.mod(u32, now_nano, std.time.ns_per_s);
-    try msgPack.writeTimestamp(now_sec, now_sec_nano);
+    const now_sec_nano = try std.math.mod(i128, now_nano, std.time.ns_per_s);
+    try msgPack.writeTimestamp(now_sec, @intCast(u32, now_sec_nano));
     try msgPack.writeTimestamp(now_sec, 0);
 
     try msgPack.writeAny(foo);
@@ -272,18 +274,26 @@ pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
     try msgPack.beginArray(5);
 
     try msgPack.beginMap(3);
-    try msgPack.writeAny(@as(i64, 0));
+    std.debug.print("not suppport non string key map for now\n", .{});
+    try msgPack.writeString("key1");
+    //try msgPack.writeAny(@as(i64, 0));
     try msgPack.writeAny(@as(i64, 5));
-    try msgPack.writeAny(@as(i64, 127));
+
+    try msgPack.writeString("key2");
+    //try msgPack.writeAny(@as(i64, 127));
     try msgPack.writeAny(@as(i64, -1));
-    try msgPack.writeAny(@as(i64, -11));
+
+    try msgPack.writeString("key3");
+    //try msgPack.writeAny(@as(i64, -11));
     try msgPack.writeAny(@as(i64, -32));
+    //--------end map
 
     try msgPack.writeAny(@as(u8, 123));
     try msgPack.writeAny(@as(i8, -123));
 
     try msgPack.writeAny(@as(u16, 456));
     try msgPack.writeAny(@as(i16, -789));
+    //----end 5 array
 
     try msgPack.writeAny(@as(f32, 1.2345678987654321));
     try msgPack.writeAny(@as(f64, 1.2345678987654321));
@@ -301,7 +311,6 @@ pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
     try msgPack.writeBool(true);
     try msgPack.writeBool(false);
 
-    std.debug.print("\n", .{});
     const writtenBuffer = encodingBuffer[0..try stream.getPos()];
     var i: usize = 0;
     while (true) : (i += 16) {
@@ -352,8 +361,14 @@ pub fn testStuff(allocator: *std.mem.Allocator) anyerror!void {
     }
     std.debug.print("\n", .{});
 
-    var reader = msgPackReader(std.io.fixedBufferStream(writtenBuffer).reader());
+    var tempStream = std.io.fixedBufferStream(writtenBuffer);
+    var reader = msgPackReader(tempStream.reader());
+    var arena = std.heap.ArenaAllocator.init(allocator);
     while (true) {
-        reader.read(0) catch break;
+        var value = reader.readValue(&arena) catch break;
+        std.debug.print("value: ", .{});
+        try value.root.stringify(.{}, std.io.getStdErr().writer());
+        std.debug.print("\n ", .{});
     }
+    std.debug.print("\n ", .{});
 }
