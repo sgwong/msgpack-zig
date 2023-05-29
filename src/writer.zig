@@ -316,6 +316,6 @@ pub fn MsgPackWriter(comptime WriterType: type) type {
     };
 }
 
-pub fn msgPackWriter(writer: anytype, options: MsgPackWriter(@TypeOf(writer), false).Options) MsgPackWriter(@TypeOf(writer), false) {
-    return MsgPackWriter(@TypeOf(writer), false).init(writer, options);
+pub fn msgPackWriter(writer: anytype, options: MsgPackWriter(@TypeOf(writer)).Options) MsgPackWriter(@TypeOf(writer)) {
+    return MsgPackWriter(@TypeOf(writer)).init(writer, options);
 }

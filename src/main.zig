@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const msgPackWriter = @import("writer.zig").MsgPackWriter;
-const msgPackReader = @import("reader.zig").MsgPackReader;
+const msgPackWriter = @import("writer.zig").msgPackWriter;
+const msgPackReader = @import("reader.zig").msgPackReader;
 
 const String = struct {
     value: []const u8,
@@ -104,14 +104,13 @@ pub fn main() anyerror!void {
             for (possibleEncodings.items) |possibleEncoding| {
                 //std.debug.print("READ: {}\n", .{std.fmt.fmtSliceHexLower(possibleEncoding)});
                 var tempStream = std.io.fixedBufferStream(possibleEncoding);
-                const IOReader = msgPackReader(@TypeOf(tempStream.reader()));
-                var reader = IOReader.init(tempStream.reader());
+                var reader = msgPackReader(tempStream.reader());
                 const value = try reader.readJson(&arena);
 
                 try decodedEncodings.append(value.root);
 
                 tempStream = std.io.fixedBufferStream(possibleEncoding);
-                reader = IOReader.init(tempStream.reader());
+                reader = msgPackReader(tempStream.reader());
                 const msgPackValue = try reader.readValue(&arena);
                 std.debug.print("  TEST: ", .{});
                 try msgPackValue.root.stringify(.{}, std.io.getStdErr().writer());
@@ -120,8 +119,7 @@ pub fn main() anyerror!void {
 
             // encode the value from the test
             stream.reset();
-            const MsgPackW = msgPackWriter(@TypeOf(stream.writer()));
-            var msgPack = MsgPackW.init(stream.writer(), .{});
+            var msgPack = msgPackWriter(stream.writer(), .{});
             const valueToEncode: std.json.Value = blk: {
                 if (testObject.get("nil")) |value| {
                     try msgPack.writeJson(value);
