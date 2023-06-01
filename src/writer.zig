@@ -239,7 +239,8 @@ pub fn MsgPackWriter(comptime WriterType: type) type {
                 return;
             }
             switch (typeInfo) {
-                .Int => try self.writeInt(value.*),
+                .Null => try self.writeNil(),
+                .Int, .ComptimeInt => try self.writeInt(value.*),
                 .Float => try self.writeFloat(value.*),
                 .Bool => try self.writeBool(value.*),
 
@@ -250,7 +251,13 @@ pub fn MsgPackWriter(comptime WriterType: type) type {
                         try self.writeInt(@enumToInt(value.*));
                     }
                 },
-
+                .Optional => {
+                    if (value.*) |unwrap_value| {
+                        try self.writeAny(unwrap_value);
+                    } else {
+                        try self.writeNil();
+                    }
+                },
                 .Struct => {
                     if (comptime std.meta.trait.hasFn("msgPackWrite")(ValueType)) {
                         return try value.msgPackWrite(self);

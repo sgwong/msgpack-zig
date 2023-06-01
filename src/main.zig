@@ -21,6 +21,8 @@ const Foo = struct {
     c: []const bool,
     d: Bar,
     e: String,
+    f: ?i32,
+    g: ?u64,
 };
 
 const Baz = enum {
@@ -258,6 +260,8 @@ pub fn testStuff(allocator: std.mem.Allocator) anyerror!void {
             .baz = .Drei,
         },
         .e = String{ .value = "this is a String" },
+        .f = null,
+        .g = 34,
     };
 
     const now_nano = std.time.nanoTimestamp();
