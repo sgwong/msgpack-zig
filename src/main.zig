@@ -68,7 +68,7 @@ pub fn main() anyerror!void {
     while (try iterator.next()) |entry| {
         defer i += 1;
 
-        if (entry.kind != .File) continue;
+        if (entry.kind != .file) continue;
         std.log.info("{s}", .{entry.name});
 
         var file = try testDir.dir.openFile(entry.name, .{ .mode = .read_only });
