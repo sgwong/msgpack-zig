@@ -29,7 +29,7 @@ pub const Timestamp = struct {
             try std.fmt.format(writer, "not support -ve sec UTC\n", .{});
             return;
         }
-        const epoch_seconds = EpochSeconds{ .secs = @intCast(u64, self.sec) };
+        const epoch_seconds = EpochSeconds{ .secs = @intCast(self.sec) };
         const day_seconds = epoch_seconds.getDaySeconds();
         const hour = day_seconds.getHoursIntoDay();
         const minutes = day_seconds.getMinutesIntoHour();
@@ -303,7 +303,7 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                             std.debug.print("pos fixint: {}\n", .{value});
                         } else if (tag & 0b1110_0000 == 0b1110_0000) {
                             // negative fixint
-                            var value = @bitCast(i8, tag & 0b1111_1111);
+                            var value: i8 = @bitCast(tag & 0b1111_1111);
                             std.debug.print("neg fixint: {}\n", .{value});
                         }
                     },
@@ -355,20 +355,20 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                 0xc3 => return Value{ .Bool = true },
 
                 // u8 - u64
-                0xcc => return Value{ .UInt = @intCast(u64, try self.readAnyEndianCorrected(u8)) },
-                0xcd => return Value{ .UInt = @intCast(u64, try self.readAnyEndianCorrected(u16)) },
-                0xce => return Value{ .UInt = @intCast(u64, try self.readAnyEndianCorrected(u32)) },
-                0xcf => return Value{ .UInt = @intCast(u64, try self.readAnyEndianCorrected(u64)) },
+                0xcc => return Value{ .UInt = @intCast(try self.readAnyEndianCorrected(u8)) },
+                0xcd => return Value{ .UInt = @intCast(try self.readAnyEndianCorrected(u16)) },
+                0xce => return Value{ .UInt = @intCast(try self.readAnyEndianCorrected(u32)) },
+                0xcf => return Value{ .UInt = @intCast(try self.readAnyEndianCorrected(u64)) },
 
                 // i8 - i64
-                0xd0 => return Value{ .Int = @intCast(i64, try self.readAnyEndianCorrected(i8)) },
-                0xd1 => return Value{ .Int = @intCast(i64, try self.readAnyEndianCorrected(i16)) },
-                0xd2 => return Value{ .Int = @intCast(i64, try self.readAnyEndianCorrected(i32)) },
-                0xd3 => return Value{ .Int = @intCast(i64, try self.readAnyEndianCorrected(i64)) },
+                0xd0 => return Value{ .Int = @intCast(try self.readAnyEndianCorrected(i8)) },
+                0xd1 => return Value{ .Int = @intCast(try self.readAnyEndianCorrected(i16)) },
+                0xd2 => return Value{ .Int = @intCast(try self.readAnyEndianCorrected(i32)) },
+                0xd3 => return Value{ .Int = @intCast(try self.readAnyEndianCorrected(i64)) },
 
                 // f32 - f64
-                0xca => return Value{ .Float = @floatCast(f64, try self.readAnyEndianCorrected(f32)) },
-                0xcb => return Value{ .Float = @floatCast(f64, try self.readAnyEndianCorrected(f64)) },
+                0xca => return Value{ .Float = @floatCast(try self.readAnyEndianCorrected(f32)) },
+                0xcb => return Value{ .Float = @floatCast(try self.readAnyEndianCorrected(f64)) },
 
                 // str 8 - str 32
                 0xd9 => { // str 8
@@ -400,35 +400,35 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
 
                 // array 16 - array 32
                 0xdc => { // array 16
-                    const len = @intCast(usize, try self.readAnyEndianCorrected(u16));
+                    const len: usize = @intCast(try self.readAnyEndianCorrected(u16));
                     return try self.readValueArray(allocator, len);
                 },
                 0xdd => { // array 32
-                    const len = @intCast(usize, try self.readAnyEndianCorrected(u32));
+                    const len: usize = @intCast(try self.readAnyEndianCorrected(u32));
                     return try self.readValueArray(allocator, len);
                 },
 
                 // map 16 - map 32
                 0xde => { // map 16
-                    const len = @intCast(usize, try self.readAnyEndianCorrected(u16));
+                    const len: usize = @intCast(try self.readAnyEndianCorrected(u16));
                     return try self.readValueObject(allocator, len);
                 },
                 0xdf => { // map 32
-                    const len = @intCast(usize, try self.readAnyEndianCorrected(u32));
+                    const len: usize = @intCast(try self.readAnyEndianCorrected(u32));
                     return try self.readValueObject(allocator, len);
                 },
 
                 // ext
                 0xd4 => { // fixext 1
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readValueExt(allocator, typ, 1);
                 },
                 0xd5 => { // fixext 2
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readValueExt(allocator, typ, 2);
                 },
                 0xd6 => { // fixext 4
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
 
                     if (typ == -1) {
                         // timestamp 32
@@ -441,27 +441,27 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                     }
                 },
                 0xd7 => { // fixext 8
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
 
                     if (typ == -1) {
                         // timestamp 64
                         var data: [8]u8 = undefined;
                         _ = try self.reader.readAll(data[0..]);
                         const data64 = try self.readFromSliceEndianCorrected(u64, data[0..]);
-                        const nsec = @intCast(u32, data64 >> 34);
-                        const sec = @bitCast(i64, data64 & 0x00000003ffffffff);
+                        const nsec: u32 = @intCast(data64 >> 34);
+                        const sec: i64 = @bitCast(data64 & 0x00000003ffffffff);
                         return Value{ .Timestamp = .{ .sec = sec, .nsec = nsec } };
                     } else {
                         return try self.readValueExt(allocator, typ, 8);
                     }
                 },
                 0xd8 => { // fixext 16
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readValueExt(allocator, typ, 16);
                 },
                 0xc7 => { // ext 8
                     const len = try self.readAnyEndianCorrected(u8);
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
 
                     if (typ == -1) {
                         // timestamp 96
@@ -480,12 +480,12 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                 },
                 0xc8 => { // ext 16
                     const len = try self.readAnyEndianCorrected(u16);
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readValueExt(allocator, typ, len);
                 },
                 0xc9 => { // ext 32
                     const len = try self.readAnyEndianCorrected(u32);
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readValueExt(allocator, typ, len);
                 },
 
@@ -494,22 +494,22 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                     if (tag & 0b1000_0000 == 0) {
                         // positive fixint
                         const value = tag;
-                        return Value{ .Int = @intCast(i64, value) };
+                        return Value{ .Int = @intCast(value) };
                     } else if (tag & 0b1110_0000 == 0b1110_0000) {
                         // negative fixint
-                        var value = @bitCast(i8, tag & 0b1111_1111);
-                        return Value{ .Int = @intCast(i64, value) };
+                        var value: i8 = @bitCast(tag & 0b1111_1111);
+                        return Value{ .Int = @intCast(value) };
                     } else if (tag & 0b1110_0000 == 0b1010_0000) {
                         // fixstr
                         const len = tag & 0b0001_1111;
                         return try self.readValueString(allocator, len);
                     } else if (tag & 0b1111_0000 == 0b1001_0000) {
                         // fixarray
-                        const len = @intCast(usize, tag & 0b0000_1111);
+                        const len: usize = @intCast(tag & 0b0000_1111);
                         return try self.readValueArray(allocator, len);
                     } else if (tag & 0b1111_0000 == 0b1000_0000) {
                         // fixmap
-                        const len = @intCast(usize, tag & 0b0000_1111);
+                        const len: usize = @intCast(tag & 0b0000_1111);
                         return try self.readValueObject(allocator, len);
                     } else {
                         std.debug.print("read other: {x:0>2}\n", .{tag});
@@ -576,13 +576,14 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
             return Value{ .Map = object };
         }
 
-        pub fn readJson(self: *Self, arena: *std.heap.ArenaAllocator) anyerror!std.json.ValueTree {
+        pub fn readJson(self: *Self, arena: *std.heap.ArenaAllocator) anyerror!std.json.Value {
             const value = try self.readJsonInternal(arena.allocator());
+            return value;
 
-            return std.json.ValueTree{
-                .arena = arena,
-                .root = value,
-            };
+            //return std.json.ValueTree{
+            //    .arena = arena,
+            //    .root = value,
+            //};
         }
 
         fn readJsonInternal(self: *Self, allocator: std.mem.Allocator) anyerror!std.json.Value {
@@ -595,13 +596,13 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                 0xc3 => return std.json.Value{ .bool = true },
 
                 // u8 - u64
-                0xcc => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(u8)) },
-                0xcd => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(u16)) },
-                0xce => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(u32)) },
+                0xcc => return std.json.Value{ .integer = @intCast(try self.readAnyEndianCorrected(u8)) },
+                0xcd => return std.json.Value{ .integer = @intCast(try self.readAnyEndianCorrected(u16)) },
+                0xce => return std.json.Value{ .integer = @intCast(try self.readAnyEndianCorrected(u32)) },
                 0xcf => {
                     const value = try self.readAnyEndianCorrected(u64);
-                    if (value <= @intCast(u64, std.math.maxInt(i64))) {
-                        return std.json.Value{ .integer = @intCast(i64, value) };
+                    if (value <= @as(u64, @intCast(std.math.maxInt(i64)))) {
+                        return std.json.Value{ .integer = @intCast(value) };
                     } else {
                         var buffer = std.ArrayList(u8).init(allocator);
                         try std.fmt.formatIntValue(value, "", .{}, buffer.writer());
@@ -610,14 +611,14 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                 },
 
                 // i8 - i64
-                0xd0 => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(i8)) },
-                0xd1 => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(i16)) },
-                0xd2 => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(i32)) },
-                0xd3 => return std.json.Value{ .integer = @intCast(i64, try self.readAnyEndianCorrected(i64)) },
+                0xd0 => return std.json.Value{ .integer = @intCast(try self.readAnyEndianCorrected(i8)) },
+                0xd1 => return std.json.Value{ .integer = @intCast(try self.readAnyEndianCorrected(i16)) },
+                0xd2 => return std.json.Value{ .integer = @intCast(try self.readAnyEndianCorrected(i32)) },
+                0xd3 => return std.json.Value{ .integer = @intCast(try self.readAnyEndianCorrected(i64)) },
 
                 // f32 - f64
-                0xca => return std.json.Value{ .float = @floatCast(f64, try self.readAnyEndianCorrected(f32)) },
-                0xcb => return std.json.Value{ .float = @floatCast(f64, try self.readAnyEndianCorrected(f64)) },
+                0xca => return std.json.Value{ .float = @floatCast(try self.readAnyEndianCorrected(f32)) },
+                0xcb => return std.json.Value{ .float = @floatCast(try self.readAnyEndianCorrected(f64)) },
 
                 // str 8 - str 32
                 0xd9 => { // str 8
@@ -649,35 +650,35 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
 
                 // array 16 - array 32
                 0xdc => { // array 16
-                    const len = @intCast(usize, try self.readAnyEndianCorrected(u16));
+                    const len: usize = @intCast(try self.readAnyEndianCorrected(u16));
                     return try self.readJsonArray(allocator, len);
                 },
                 0xdd => { // array 32
-                    const len = @intCast(usize, try self.readAnyEndianCorrected(u32));
+                    const len: usize = @intCast(try self.readAnyEndianCorrected(u32));
                     return try self.readJsonArray(allocator, len);
                 },
 
                 // map 16 - map 32
                 0xde => { // map 16
-                    const len = @intCast(usize, try self.readAnyEndianCorrected(u16));
+                    const len: usize = @intCast(try self.readAnyEndianCorrected(u16));
                     return try self.readJsonObject(allocator, len);
                 },
                 0xdf => { // map 32
-                    const len = @intCast(usize, try self.readAnyEndianCorrected(u32));
+                    const len: usize = @intCast(try self.readAnyEndianCorrected(u32));
                     return try self.readJsonObject(allocator, len);
                 },
 
                 // ext
                 0xd4 => { // fixext 1
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readJsonExt(allocator, typ, 1);
                 },
                 0xd5 => { // fixext 2
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readJsonExt(allocator, typ, 2);
                 },
                 0xd6 => { // fixext 4
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
 
                     if (typ == -1) {
                         // timestamp 32
@@ -694,15 +695,15 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                     }
                 },
                 0xd7 => { // fixext 8
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
 
                     if (typ == -1) {
                         // timestamp 64
                         var data: [8]u8 = undefined;
                         _ = try self.reader.readAll(data[0..]);
                         const data64 = try self.readFromSliceEndianCorrected(u64, data[0..]);
-                        const nsec = @intCast(u32, data64 >> 34);
-                        const sec = @bitCast(i64, data64 & 0x00000003ffffffff);
+                        const nsec: u32 = @intCast(data64 >> 34);
+                        const sec: i64 = @bitCast(data64 & 0x00000003ffffffff);
 
                         var ext = try std.ArrayList(std.json.Value).initCapacity(allocator, 2);
                         try ext.append(std.json.Value{ .integer = sec });
@@ -713,12 +714,12 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                     }
                 },
                 0xd8 => { // fixext 16
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readJsonExt(allocator, typ, 16);
                 },
                 0xc7 => { // ext 8
                     const len = try self.readAnyEndianCorrected(u8);
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
 
                     if (typ == -1) {
                         // timestamp 96
@@ -740,12 +741,12 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                 },
                 0xc8 => { // ext 16
                     const len = try self.readAnyEndianCorrected(u16);
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readJsonExt(allocator, typ, len);
                 },
                 0xc9 => { // ext 32
                     const len = try self.readAnyEndianCorrected(u32);
-                    const typ = @bitCast(i8, try self.reader.readByte());
+                    const typ: i8 = @bitCast(try self.reader.readByte());
                     return try self.readJsonExt(allocator, typ, len);
                 },
 
@@ -754,22 +755,22 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
                     if (tag & 0b1000_0000 == 0) {
                         // positive fixint
                         const value = tag;
-                        return std.json.Value{ .integer = @intCast(i64, value) };
+                        return std.json.Value{ .integer = @intCast(value) };
                     } else if (tag & 0b1110_0000 == 0b1110_0000) {
                         // negative fixint
-                        var value = @bitCast(i8, tag & 0b1111_1111);
-                        return std.json.Value{ .integer = @intCast(i64, value) };
+                        var value: i8 = @bitCast(tag & 0b1111_1111);
+                        return std.json.Value{ .integer = @intCast(value) };
                     } else if (tag & 0b1110_0000 == 0b1010_0000) {
                         // fixstr
                         const len = tag & 0b0001_1111;
                         return try self.readJsonString(allocator, len);
                     } else if (tag & 0b1111_0000 == 0b1001_0000) {
                         // fixarray
-                        const len = @intCast(usize, tag & 0b0000_1111);
+                        const len: usize = @intCast(tag & 0b0000_1111);
                         return try self.readJsonArray(allocator, len);
                     } else if (tag & 0b1111_0000 == 0b1000_0000) {
                         // fixmap
-                        const len = @intCast(usize, tag & 0b0000_1111);
+                        const len: usize = @intCast(tag & 0b0000_1111);
                         return try self.readJsonObject(allocator, len);
                     } else {
                         std.debug.print("read other: {x:0>2}\n", .{tag});
@@ -780,7 +781,7 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
         }
 
         pub fn readJsonExt(self: *Self, allocator: std.mem.Allocator, typ: i8, len: usize) anyerror!std.json.Value {
-            const strLen = @intCast(usize, len) * 2 + if (len > 1) @intCast(usize, len - 1) else 0;
+            const strLen: usize = @as(usize, @intCast(len)) * 2 + if (len > 1) @as(usize, @intCast(len - 1)) else 0;
             const buffer = try allocator.alloc(u8, strLen);
             @memset(buffer, 0);
             var stream = std.io.fixedBufferStream(buffer);
@@ -810,7 +811,7 @@ pub fn MsgPackReader(comptime ReaderType: type) type {
         }
 
         pub fn readJsonBinary(self: *Self, allocator: std.mem.Allocator, len: usize) anyerror!std.json.Value {
-            const strLen = @intCast(usize, len) * 2 + if (len > 1) @intCast(usize, len - 1) else 0;
+            const strLen: usize = @as(usize, @intCast(len)) * 2 + if (len > 1) @as(usize, @intCast(len - 1)) else 0;
             const buffer = try allocator.alloc(u8, strLen);
             var stream = std.io.fixedBufferStream(buffer);
             var writer = stream.writer();

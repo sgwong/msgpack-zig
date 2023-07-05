@@ -78,18 +78,21 @@ pub fn main() anyerror!void {
         fileContentBuffer.clearRetainingCapacity();
         try fileReader.readAllArrayList(&fileContentBuffer, std.math.maxInt(usize));
 
-        var parser = std.json.Parser.init(allocator, .alloc_if_needed);
-        defer parser.deinit();
+        //var parser = std.json.Parser.init(allocator, .alloc_if_needed);
+        //defer parser.deinit();
 
-        var valueTree: std.json.ValueTree = try parser.parse(fileContentBuffer.items);
-        defer valueTree.deinit();
+        //var valueTree: std.json.ValueTree = try parser.parse(fileContentBuffer.items);
+        //defer valueTree.deinit();
+        const parsed = try std.json.parseFromSlice(std.json.Value, allocator, fileContentBuffer.items, .{});
+        defer parsed.deinit();
+        const root = parsed.value;
 
         var arena = std.heap.ArenaAllocator.init(allocator);
         defer arena.deinit();
         var arena_allocator = arena.allocator();
 
         // iterate over all test cases in one file
-        for (valueTree.root.array.items) |testCaseJson| {
+        for (root.array.items) |testCaseJson| {
             const testObject = testCaseJson.object;
             const msgpackEncodingsJson = testObject.get("msgpack").?.array;
 
@@ -111,7 +114,7 @@ pub fn main() anyerror!void {
                 var reader = msgPackReader(tempStream.reader());
                 const value = try reader.readJson(&arena);
 
-                try decodedEncodings.append(value.root);
+                try decodedEncodings.append(value);
 
                 tempStream = std.io.fixedBufferStream(possibleEncoding);
                 reader = msgPackReader(tempStream.reader());
@@ -147,7 +150,7 @@ pub fn main() anyerror!void {
                     const timestampArray = timestampJson.array.items;
                     const sec = timestampArray[0].integer;
                     const nsec = timestampArray[1].integer;
-                    try msgPack.writeTimestamp(sec, @intCast(u32, nsec));
+                    try msgPack.writeTimestamp(sec, @intCast(nsec));
                     break :blk timestampJson;
                 } else if (testObject.get("bignum")) |numberJson| {
                     switch (numberJson) {
@@ -183,7 +186,7 @@ pub fn main() anyerror!void {
                     while (iter.next()) |byte| {
                         try encoding.append(try std.fmt.parseInt(u8, byte, 16));
                     }
-                    try msgPack.writeExt(@intCast(i8, typ), encoding.items);
+                    try msgPack.writeExt(@intCast(typ), encoding.items);
                     break :blk extJson;
                 } else {
                     return error.InvalidTestFile;
@@ -265,9 +268,9 @@ pub fn testStuff(allocator: std.mem.Allocator) anyerror!void {
     };
 
     const now_nano = std.time.nanoTimestamp();
-    const now_sec = @intCast(i64, @divTrunc(now_nano, std.time.ns_per_s));
+    const now_sec: i64 = @intCast(@divTrunc(now_nano, std.time.ns_per_s));
     const now_sec_nano = try std.math.mod(i128, now_nano, std.time.ns_per_s);
-    try msgPack.writeTimestamp(now_sec, @intCast(u32, now_sec_nano));
+    try msgPack.writeTimestamp(now_sec, @intCast(now_sec_nano));
     try msgPack.writeTimestamp(now_sec, 0);
 
     try msgPack.writeAny(foo);
@@ -320,7 +323,7 @@ pub fn testStuff(allocator: std.mem.Allocator) anyerror!void {
     while (true) : (i += 16) {
         if (i >= writtenBuffer.len) break;
 
-        const line = writtenBuffer[i..std.math.min(writtenBuffer.len, i + 16)];
+        const line = writtenBuffer[i..@min(writtenBuffer.len, i + 16)];
 
         var k: usize = 0;
         while (k < 16) : (k += 1) {
